@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Coach - AI-Powered Interview Practice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js';
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script>
+        const supabaseUrl = 'https://vtbzvhstgzkjhlczjxun.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0Ynp2aHN0Z3pramhsY3pqeHVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE2NTM2MDQsImV4cCI6MjA2NzIyOTYwNH0.ZzrknfEBTAmOdPgZS7urwbRBzmR4lX-hservwwVTTlc';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-bg': '#0a0a0a',
+                        'dark-card': '#1a1a1a',
+                        'dark-border': '#2a2a2a',
+                        'dark-text': '#e5e5e5',
+                        'dark-muted': '#a0a0a0'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark-bg text-dark-text min-h-screen">
+    <!-- Authentication Screen -->
+    <div id="authScreen" class="min-h-screen flex items-center justify-center">
+        <div class="glass-effect rounded-2xl p-8 w-full max-w-md">
+            <!-- Logo and Title -->
+            <div class="text-center mb-8">
+                <i class="fas fa-microphone-alt text-blue-400 text-4xl mb-4"></i>
+                <h1 class="text-3xl font-bold gradient-bg bg-clip-text text-transparent">Interview Coach</h1>
+                <p class="text-dark-muted mt-2">AI-Powered Interview Practice</p>
+            </div>
+
+            <!-- Sign Up Form -->
+            <div id="signupForm" class="space-y-4">
+                <h2 class="text-2xl font-semibold text-center mb-6">Create Account</h2>
+                <input type="text" id="signup-name" placeholder="Full Name" 
+                       class="w-full p-4 rounded-xl bg-dark-border border border-gray-600 focus:border-blue-400 focus:outline-none">
+                <input type="email" id="signup-email" placeholder="Email Address" 
+                       class="w-full p-4 rounded-xl bg-dark-border border border-gray-600 focus:border-blue-400 focus:outline-none">
+                <input type="password" id="signup-password" placeholder="Password (min 6 characters)" 
+                       class="w-full p-4 rounded-xl bg-dark-border border border-gray-600 focus:border-blue-400 focus:outline-none">
+                <button onclick="signUp()" class="w-full p-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 transition-all font-semibold">
+                    Create Account
+                </button>
+                <p class="text-center text-sm text-dark-muted">
+                    Already have an account? 
+                    <button onclick="showLoginForm()" class="text-blue-400 hover:text-blue-300">Sign In</button>
+                </p>
+            </div>
+
+            <!-- Sign In Form -->
+            <div id="loginForm" class="space-y-4 hidden">
+                <h2 class="text-2xl font-semibold text-center mb-6">Welcome Back</h2>
+                <input type="email" id="login-email" placeholder="Email Address" 
+                       class="w-full p-4 rounded-xl bg-dark-border border border-gray-600 focus:border-blue-400 focus:outline-none">
+                <input type="password" id="login-password" placeholder="Password" 
+                       class="w-full p-4 rounded-xl bg-dark-border border border-gray-600 focus:border-blue-400 focus:outline-none">
+                <button onclick="signIn()" class="w-full p-4 rounded-xl bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 transition-all font-semibold">
+                    Sign In
+                </button>
+                <p class="text-center text-sm text-dark-muted">
+                    Don't have an account? 
+                    <button onclick="showSignupForm()" class="text-blue-400 hover:text-blue-300">Sign Up</button>
+                </p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="authLoading" class="hidden text-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+                <p class="text-dark-muted">Processing...</p>
+            </div>
+
+            <!-- Success Message -->
+            <div id="authSuccess" class="hidden text-center">
+                <i class="fas fa-check-circle text-green-400 text-4xl mb-4"></i>
+                <p class="text-green-400 font-semibold">Success!</p>
+                <p class="text-dark-muted text-sm">Redirecting to Interview Coach...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Content (Hidden until authenticated) -->
+    <div id="mainApp" class="hidden">
+        <!-- Navigation -->
+        <nav class="bg-dark-card border-b border-dark-border px-8 py-6">
+            <div class="flex items-center justify-between max-w-7xl mx-auto">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-microphone-alt text-blue-400 text-3xl"></i>
+                    <h1 class="text-3xl font-bold">Interview Coach</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="userEmail" class="text-dark-muted"></span>
+                    <button id="logoutBtn" class="p-3 rounded-xl bg-red-600 hover:bg-red-700 transition-colors">
+                        <i class="fas fa-sign-out-alt text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-8 py-12">
+        <!-- Home Screen -->
+        <div id="homeScreen" class="space-y-12">
+            <div class="text-center space-y-6">
+                <h2 class="text-6xl font-bold gradient-bg bg-clip-text text-transparent">
+                    🎯 Master Your Interview Skills
+                </h2>
+                <p class="text-2xl text-dark-muted max-w-3xl mx-auto">
+                    AI-powered interview practice with real-time feedback on fluency, relevance, and confidence
+                </p>
+            </div>
+
+            <!-- Interview Type Selection -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div class="interview-type-card glass-effect rounded-2xl p-8 cursor-pointer hover:bg-dark-border transition-all transform hover:scale-105" data-type="ielts">
+                    <div class="text-center space-y-6">
+                        <div class="text-6xl">🗣️</div>
+                        <h3 class="text-2xl font-semibold">IELTS Speaking</h3>
+                        <p class="text-dark-muted text-lg">Practice IELTS speaking test format with AI feedback</p>
+                    </div>
+                </div>
+
+                <div class="interview-type-card glass-effect rounded-2xl p-8 cursor-pointer hover:bg-dark-border transition-all transform hover:scale-105" data-type="visa">
+                    <div class="text-center space-y-6">
+                        <div class="text-6xl">🛂</div>
+                        <h3 class="text-2xl font-semibold">Visa Interview</h3>
+                        <p class="text-dark-muted text-lg">Student & Job visa interview preparation</p>
+                    </div>
+                </div>
+
+                <div class="interview-type-card glass-effect rounded-2xl p-8 cursor-pointer hover:bg-dark-border transition-all transform hover:scale-105" data-type="job">
+                    <div class="text-center space-y-6">
+                        <div class="text-6xl">💼</div>
+                        <h3 class="text-2xl font-semibold">Job Interview</h3>
+                        <p class="text-dark-muted text-lg">Role-specific interview questions and feedback</p>
+                    </div>
+                </div>
+
+                <div class="interview-type-card glass-effect rounded-2xl p-8 cursor-pointer hover:bg-dark-border transition-all transform hover:scale-105" data-type="basic">
+                    <div class="text-center space-y-6">
+                        <div class="text-6xl">💬</div>
+                        <h3 class="text-2xl font-semibold">Basic English</h3>
+                        <p class="text-dark-muted text-lg">General English communication practice</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Progress Section -->
+            <div id="progressSection" class="glass-effect rounded-2xl p-8 mt-8 hidden">
+                <h3 class="text-2xl font-semibold mb-6">📈 My Interview Progress</h3>
+                <canvas id="progressChart" height="120"></canvas>
+                <div class="mt-8">
+                    <h4 class="text-xl font-semibold mb-4">Recent Interviews</h4>
+                    <div id="progressHistory" class="overflow-x-auto">
+                        <!-- Table or list will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+                <!-- Configuration Screen -->
+        <div id="configScreen" class="hidden space-y-12">
+            <div class="flex items-center space-x-6">
+                <button id="backToHome" class="p-3 rounded-xl bg-dark-border hover:bg-gray-700 transition-colors">
+                    <i class="fas fa-arrow-left text-xl"></i>
+                </button>
+                <h2 class="text-4xl font-bold">Configure Your Interview</h2>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <!-- Left Panel -->
+                <div class="space-y-8">
+                    <!-- Interview Type Display -->
+                    <div class="glass-effect rounded-2xl p-8">
+                        <h3 class="text-2xl font-semibold mb-6">Selected Interview Type</h3>
+                        <div id="selectedTypeDisplay" class="flex items-center space-x-4">
+                            <span id="typeIcon" class="text-4xl"></span>
+                            <span id="typeName" class="text-xl"></span>
+                        </div>
+                    </div>
+
+                    <!-- Job Role Input (for job interviews) -->
+                    <div id="jobRoleSection" class="glass-effect rounded-2xl p-8 hidden">
+                        <h3 class="text-2xl font-semibold mb-6">Job Role</h3>
+                        <input type="text" id="jobRoleInput" placeholder="e.g., Software Engineer, Marketing Manager" 
+                               class="w-full p-4 rounded-xl bg-dark-border border border-gray-600 focus:border-blue-400 focus:outline-none text-lg mb-6">
+                        
+                        <!-- Resume Upload Section -->
+                        <div class="border-t border-gray-600 pt-6">
+                            <h4 class="text-xl font-semibold mb-4">📄 Resume Upload (Optional)</h4>
+                            <p class="text-dark-muted text-lg mb-4">Upload your resume to get personalized questions based on your experience and skills.</p>
+                            
+                            <div class="space-y-4">
+                                <div class="flex items-center space-x-4">
+                                    <input type="file" id="resumeUpload" accept=".pdf,.doc,.docx,.txt" 
+                                           class="hidden">
+                                    <button id="resumeUploadBtn" class="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 transition-colors font-semibold">
+                                        <i class="fas fa-upload mr-2"></i>Choose Resume
+                                    </button>
+                                    <span id="resumeFileName" class="text-dark-muted text-lg">No file selected</span>
+                                </div>
+                                
+                                <div id="resumeStatus" class="hidden">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                            <span class="text-green-400 text-sm">Resume uploaded successfully</span>
+                                        </div>
+                                        <button id="deleteResumeBtn" class="text-red-400 hover:text-red-300 text-sm">
+                                            <i class="fas fa-trash mr-1"></i>Delete
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="resumeError" class="hidden">
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <span class="text-red-400 text-sm">Error uploading resume</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visa Type Selection (for visa interviews) -->
+                    <div id="visaTypeSection" class="glass-effect rounded-2xl p-8 hidden">
+                        <h3 class="text-2xl font-semibold mb-6">Visa Type</h3>
+                        <div class="grid grid-cols-2 gap-6">
+                            <button class="visa-type-btn p-6 rounded-xl bg-dark-border hover:bg-blue-600 transition-colors text-lg" data-visa="student">
+                                🎓 Student Visa
+                            </button>
+                            <button class="visa-type-btn p-6 rounded-xl bg-dark-border hover:bg-blue-600 transition-colors text-lg" data-visa="job">
+                                💼 Job Visa
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mode Selection -->
+                    <div class="glass-effect rounded-2xl p-8">
+                        <h3 class="text-2xl font-semibold mb-6">Interview Mode</h3>
+                        <div class="grid grid-cols-1 gap-6">
+                            <button class="mode-btn p-6 rounded-xl bg-dark-border hover:bg-green-600 transition-colors text-left" data-mode="practice">
+                                <div class="flex items-center space-x-4">
+                                    <span class="text-3xl">📚</span>
+                                    <div>
+                                        <div class="font-semibold text-xl">Practice Mode</div>
+                                        <div class="text-dark-muted text-lg">Question-by-question feedback</div>
+                                    </div>
+                                </div>
+                            </button>
+                            <button class="mode-btn p-6 rounded-xl bg-dark-border hover:bg-orange-600 transition-colors text-left" data-mode="mock">
+                                <div class="flex items-center space-x-4">
+                                    <span class="text-3xl">🎭</span>
+                                    <div>
+                                        <div class="font-semibold text-xl">Mock Interview</div>
+                                        <div class="text-dark-muted text-lg">Continuous flow, final review</div>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel -->
+                <div class="space-y-8">
+                    <!-- Features Info -->
+                    <div class="glass-effect rounded-2xl p-8">
+                        <h3 class="text-2xl font-semibold mb-6">🚀 Features</h3>
+                        <div class="space-y-6">
+                            <div class="bg-green-900 bg-opacity-30 border border-green-500 rounded-xl p-6">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <i class="fas fa-check-circle text-green-400 text-xl"></i>
+                                    <span class="font-semibold text-green-400 text-lg">Speech Recognition</span>
+                                </div>
+                                <p class="text-dark-muted text-lg">
+                                    Real-time transcription and analysis using advanced speech recognition technology.
+                                </p>
+                            </div>
+                            <div class="bg-blue-900 bg-opacity-30 border border-blue-500 rounded-xl p-6">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <i class="fas fa-brain text-blue-400 text-xl"></i>
+                                    <span class="font-semibold text-blue-400 text-lg">AI Analysis</span>
+                                </div>
+                                <ul class="text-dark-muted text-lg space-y-2">
+                                    <li>• Fluency & pronunciation analysis</li>
+                                    <li>• Answer relevance evaluation</li>
+                                    <li>• Confidence & body language detection</li>
+                                    <li>• Personalized feedback & recommendations</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Start Button -->
+                    <button id="startInterviewBtn" class="w-full p-6 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 transition-all font-semibold text-2xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105">
+                        🚀 Start Interview
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interview Screen -->
+        <div id="interviewScreen" class="hidden space-y-6">
+            <!-- Header -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button id="exitInterview" class="p-2 rounded-lg bg-red-600 hover:bg-red-700 transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div>
+                        <h2 class="text-2xl font-bold">Interview in Progress</h2>
+                        <p class="text-gray-400">Question <span id="currentQuestionNum">1</span> of 10</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="recordingStatus" class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-gray-500"></div>
+                        <span class="text-sm">Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Panel - Video & Controls -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Video Feed -->
+                    <div class="glass-effect rounded-xl p-6">
+                        <div class="aspect-video bg-gray-800 rounded-lg overflow-hidden relative">
+                            <video id="videoFeed" autoplay muted class="w-full h-full object-cover"></video>
+                            <canvas id="analysisCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+                            <div class="absolute top-4 right-4 bg-black bg-opacity-50 rounded-lg p-2">
+                                <div class="text-sm">Body Language: <span id="confidenceScore" class="font-bold text-green-400">--</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Question Display -->
+                    <div class="glass-effect rounded-xl p-6">
+                        <div class="flex items-start space-x-4">
+                            <div class="text-2xl">❓</div>
+                            <div class="flex-1">
+                                <h3 class="text-lg font-semibold mb-2">Current Question</h3>
+                                <p id="currentQuestion" class="text-gray-300 text-lg leading-relaxed">
+                                    Loading question...
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="glass-effect rounded-xl p-6">
+                        <div class="flex items-center justify-center space-x-4">
+                            <button id="startRecording" class="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-700 transition-colors font-semibold">
+                                <i class="fas fa-microphone mr-2"></i>Start Recording
+                            </button>
+                            <button id="stopRecording" class="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 transition-colors font-semibold hidden">
+                                <i class="fas fa-stop mr-2"></i>Stop Recording
+                            </button>
+                            <button id="nextQuestion" class="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 transition-colors font-semibold hidden">
+                                <i class="fas fa-arrow-right mr-2"></i>Next Question
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel - Real-time Feedback -->
+                <div class="space-y-6">
+                    <!-- Live Scores -->
+                    <div class="glass-effect rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-4">📊 Live Scores</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm">Fluency</span>
+                                    <span id="fluencyScore" class="font-bold">--/10</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="fluencyBar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm">Relevance</span>
+                                    <span id="relevanceScore" class="font-bold">--/10</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="relevanceBar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm">Body Language</span>
+                                    <span id="confidenceScoreDisplay" class="font-bold">--/10</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="confidenceBar" class="bg-purple-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transcript -->
+                    <div class="glass-effect rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-4">📝 Transcript</h3>
+                        <div id="transcript" class="bg-gray-800 rounded-lg p-4 h-32 overflow-y-auto text-sm">
+                            <p class="text-gray-500">Your speech will appear here...</p>
+                        </div>
+                    </div>
+
+                    <!-- Quick Feedback (Practice Mode) -->
+                    <div id="quickFeedback" class="space-y-4 hidden">
+                        <!-- Fluency Quick Feedback -->
+                        <div class="glass-effect rounded-xl p-4">
+                            <h4 class="text-md font-semibold text-blue-400 mb-2">🗣️ Fluency</h4>
+                            <div id="fluencyQuickFeedback" class="text-sm text-gray-300">
+                                <!-- Fluency quick feedback will be populated here -->
+                            </div>
+                        </div>
+
+                        <!-- Relevance Quick Feedback -->
+                        <div class="glass-effect rounded-xl p-4">
+                            <h4 class="text-md font-semibold text-green-400 mb-2">🎯 Relevance</h4>
+                            <div id="relevanceQuickFeedback" class="text-sm text-gray-300">
+                                <!-- Relevance quick feedback will be populated here -->
+                            </div>
+                        </div>
+
+                        <!-- Body Language Quick Feedback -->
+                        <div class="glass-effect rounded-xl p-4">
+                            <h4 class="text-md font-semibold text-purple-400 mb-2">💪 Body Language</h4>
+                            <div id="bodyLanguageQuickFeedback" class="text-sm text-gray-300">
+                                <!-- Body language quick feedback will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden space-y-8">
+            <div class="text-center space-y-4">
+                <h2 class="text-4xl font-bold">🎉 Interview Complete!</h2>
+                <p class="text-xl text-gray-300">Here's your detailed performance analysis</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Overall Scores -->
+                <div class="glass-effect rounded-xl p-6">
+                    <h3 class="text-2xl font-semibold mb-6">📈 Overall Performance</h3>
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="score-card text-center p-4 bg-gray-800 rounded-lg">
+                            <div class="text-3xl font-bold text-blue-400" id="finalFluencyScore">--</div>
+                            <div class="text-sm text-gray-400">Fluency</div>
+                        </div>
+                        <div class="score-card text-center p-4 bg-gray-800 rounded-lg">
+                            <div class="text-3xl font-bold text-green-400" id="finalRelevanceScore">--</div>
+                            <div class="text-sm text-gray-400">Relevance</div>
+                        </div>
+                        <div class="score-card text-center p-4 bg-gray-800 rounded-lg">
+                            <div class="text-3xl font-bold text-purple-400" id="finalConfidenceScore">--</div>
+                            <div class="text-sm text-gray-400">Confidence</div>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-4xl font-bold text-yellow-400" id="overallScore">--/10</div>
+                        <div class="text-lg text-gray-400">Overall Score</div>
+                    </div>
+                </div>
+
+                <!-- Progress Chart -->
+                <div class="glass-effect rounded-xl p-6">
+                    <h3 class="text-2xl font-semibold mb-6">📊 Progress Throughout Interview</h3>
+                    <canvas id="progressChart" width="400" height="300"></canvas>
+                </div>
+
+                <!-- Fluency Feedback -->
+                <div class="glass-effect rounded-xl p-6">
+                    <h3 class="text-2xl font-semibold mb-6">🗣️ Fluency & Pronunciation</h3>
+                    <div id="fluencyFeedback" class="space-y-3 text-sm text-gray-300">
+                        <!-- Fluency feedback will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Relevance Feedback -->
+                <div class="glass-effect rounded-xl p-6">
+                    <h3 class="text-2xl font-semibold mb-6">🎯 Answer Relevance</h3>
+                    <div id="relevanceFeedback" class="space-y-3 text-sm text-gray-300">
+                        <!-- Relevance feedback will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Confidence & Body Language Feedback -->
+                <div class="glass-effect rounded-xl p-6">
+                    <h3 class="text-2xl font-semibold mb-6">💪 Confidence & Body Language</h3>
+                    <div id="confidenceFeedback" class="space-y-3 text-sm text-gray-300">
+                        <!-- Confidence feedback will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Accent Analysis -->
+                <div class="lg:col-span-2 glass-effect rounded-xl p-6">
+                    <h3 class="text-2xl font-semibold mb-6">🌍 Accent Analysis (Bonus)</h3>
+                    <div id="accentAnalysis" class="text-gray-300">
+                        <!-- Accent analysis will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Answer Comparison (Mock Interviews Only) -->
+                <div id="answerComparison" class="lg:col-span-2 glass-effect rounded-xl p-6 hidden">
+                    <h3 class="text-2xl font-semibold mb-6">📋 Answer Comparison</h3>
+                    <p class="text-gray-300 mb-4">Compare your answers with model responses to improve your interview skills.</p>
+                    <div id="comparisonContent" class="space-y-4">
+                        <!-- Comparison content will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="lg:col-span-2 flex justify-center space-x-4">
+                    <button id="retakeInterview" class="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 transition-colors font-semibold">
+                        🔄 Retake Interview
+                    </button>
+                    <button id="newInterview" class="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-700 transition-colors font-semibold">
+                        ➕ New Interview Type
+                    </button>
+                    <button id="downloadReport" class="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 transition-colors font-semibold">
+                        📄 Download Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="text-center space-y-4">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto"></div>
+            <p class="text-xl">Processing your response...</p>
+            <p id="loadingText" class="text-gray-400">Analyzing speech patterns...</p>
+        </div>
+    </div>
+
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
