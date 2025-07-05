@@ -1,5 +1,5 @@
 // Configuration - Free speech recognition + Gemini API for relevance
-const GEMINI_API_KEY = "AIzaSyCXMZeoRpg_TwMTwCG5pCt-6EMLEY0AO18";
+const GEMINI_API_KEY = "AIzaSyDss0_GdfwXUFht5Qh1i7_ZXcdJNlzCJN8";
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Global variables
