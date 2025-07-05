@@ -1,5 +1,5 @@
 // Configuration - Free speech recognition + Gemini API for relevance
-const GEMINI_API_KEY = "AIzaSyDss0_GdfwXUFht5Qh1i7_ZXcdJNlzCJN8";
+const GEMINI_API_KEY = "AIzaSyDQRQixxMhCC90XKDt7Ua_AMvP6_wIwmnU";
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Global variables
@@ -332,13 +332,23 @@ function initializeApp() {
             let finalTranscript = '';
             let interimTranscript = '';
             
+            console.log('Speech recognition result event:', event);
+            console.log('Results length:', event.results.length);
+            console.log('Result index:', event.resultIndex);
+            
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
                     finalTranscript += event.results[i][0].transcript;
+                    console.log('Final transcript part:', event.results[i][0].transcript);
                 } else {
                     interimTranscript += event.results[i][0].transcript;
+                    console.log('Interim transcript part:', event.results[i][0].transcript);
                 }
             }
+            
+            console.log('Final transcript:', finalTranscript);
+            console.log('Interim transcript:', interimTranscript);
+            console.log('Current transcript before update:', currentTranscript);
             
             // Accumulate the transcript instead of overwriting it
             if (finalTranscript) {
@@ -347,6 +357,7 @@ function initializeApp() {
                     currentTranscript += ' ';
                 }
                 currentTranscript += finalTranscript;
+                console.log('Current transcript after update:', currentTranscript);
             }
             
             // Update display with accumulated transcript + interim
@@ -1101,6 +1112,54 @@ function displayCurrentQuestion() {
     document.getElementById('currentQuestionNum').textContent = currentQuestionIndex + 1;
     document.getElementById('currentQuestion').textContent = questions[currentQuestionIndex];
     console.log('Displaying question:', currentQuestionIndex + 1);
+    
+    // Initialize real-time comparison for this question
+    initializeRealtimeComparison();
+}
+
+// Function to initialize real-time answer comparison
+async function initializeRealtimeComparison() {
+    const realtimeComparison = document.getElementById('realtimeComparison');
+    const modelAnswerElement = document.getElementById('realtimeModelAnswer');
+    const keyPointsElement = document.getElementById('realtimeKeyPoints');
+    
+    // Show the comparison section
+    realtimeComparison.classList.remove('hidden');
+    
+    try {
+        // Generate expected answer for current question
+        const expectedAnswer = await generateExpectedAnswer(questions[currentQuestionIndex], currentInterviewType);
+        
+        // Update model answer
+        modelAnswerElement.innerHTML = `<p class="text-gray-200">${expectedAnswer}</p>`;
+        
+        // Extract and display key points
+        const keyPoints = extractKeyPointsFromAnswer(expectedAnswer);
+        keyPointsElement.innerHTML = keyPoints.map(point => 
+            `<span class="bg-yellow-600 px-2 py-1 rounded text-xs">${point}</span>`
+        ).join('');
+        
+    } catch (error) {
+        console.error('Error initializing real-time comparison:', error);
+        modelAnswerElement.innerHTML = '<p class="text-gray-500">Model answer not available</p>';
+        keyPointsElement.innerHTML = '<span class="bg-gray-600 px-2 py-1 rounded text-xs">Key points not available</span>';
+    }
+}
+
+// Function to extract key points from an answer
+function extractKeyPointsFromAnswer(answer) {
+    const keyPoints = [];
+    
+    if (answer.toLowerCase().includes('experience')) keyPoints.push('Experience');
+    if (answer.toLowerCase().includes('skill')) keyPoints.push('Skills');
+    if (answer.toLowerCase().includes('example')) keyPoints.push('Examples');
+    if (answer.toLowerCase().includes('goal') || answer.toLowerCase().includes('objective')) keyPoints.push('Goals');
+    if (answer.toLowerCase().includes('team') || answer.toLowerCase().includes('collaborat')) keyPoints.push('Teamwork');
+    if (answer.toLowerCase().includes('problem') || answer.toLowerCase().includes('challenge')) keyPoints.push('Problem-solving');
+    if (answer.toLowerCase().includes('result') || answer.toLowerCase().includes('impact')) keyPoints.push('Results');
+    if (answer.toLowerCase().includes('learn') || answer.toLowerCase().includes('growth')) keyPoints.push('Learning');
+    
+    return keyPoints.length > 0 ? keyPoints : ['Professional Response'];
 }
 
 function speakQuestion(question) {
@@ -1146,9 +1205,11 @@ function startRecording() {
     }
     
     console.log('Starting recording...');
+    console.log('Current transcript before starting:', currentTranscript);
     isRecording = true;
     recordingStarted = true;
     currentTranscript = '';
+    console.log('Current transcript after reset:', currentTranscript);
     
     // Update UI
     document.getElementById('startRecording').classList.add('hidden');
@@ -1211,20 +1272,31 @@ async function stopRecording() {
     }
     
     // Stop audio recording
+    console.log('currentTranscript before processing:', currentTranscript);
+    console.log('currentTranscript length:', currentTranscript ? currentTranscript.length : 0);
+    
     if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
         
         mediaRecorder.onstop = async function() {
             const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            console.log('Calling processResponse with transcript:', currentTranscript);
             await processResponse(currentTranscript, audioBlob);
         };
     } else {
+        console.log('Calling processResponse with transcript (no audio):', currentTranscript);
         await processResponse(currentTranscript, null);
     }
 }
 
 async function processResponse(transcript, audioBlob) {
-    if (!transcript.trim()) {
+    console.log('processResponse called with transcript:', transcript);
+    console.log('Transcript length:', transcript ? transcript.length : 0);
+    console.log('Transcript trimmed:', transcript ? transcript.trim() : '');
+    
+    // Check if transcript is empty or only whitespace
+    if (!transcript || !transcript.trim()) {
+        console.log('Transcript is empty or only whitespace');
         // For mock interviews, don't show error, just process empty response
         if (currentMode === 'mock') {
             transcript = 'No response provided';
@@ -1579,7 +1651,7 @@ function updateScoreDisplay(fluency, relevance, confidence) {
 }
 
 async function showQuickFeedback(responseData) {
-    console.log('Showing quick feedback...');
+    console.log('Showing enhanced quick feedback...');
     const feedbackDiv = document.getElementById('quickFeedback');
     
     // Generate quick feedback using Gemini
@@ -1637,7 +1709,111 @@ async function showQuickFeedback(responseData) {
     
     bodyLanguageDiv.innerHTML = bodyLanguageContent;
     
+    // Add answer comparison for practice mode
+    if (currentMode === 'practice' && responseData.transcript) {
+        await addQuickAnswerComparison(responseData);
+    }
+    
     feedbackDiv.classList.remove('hidden');
+    
+    // Setup toggle functionality for answer comparison
+    setupComparisonToggle();
+}
+
+// Function to add quick answer comparison for practice mode
+async function addQuickAnswerComparison(responseData) {
+    const feedbackDiv = document.getElementById('quickFeedback');
+    
+    // Generate a sample expected answer for comparison
+    const expectedAnswer = await generateExpectedAnswer(responseData.question, currentInterviewType);
+    
+    // Calculate similarity
+    const similarityScore = calculateSimilarity(responseData.transcript, expectedAnswer);
+    
+    // Create comparison HTML
+    const comparisonHTML = `
+        <div class="glass-effect rounded-xl p-4 mt-4">
+            <h4 class="text-md font-semibold text-purple-400 mb-3 flex items-center">
+                <span class="mr-2">📋</span>Answer Comparison
+            </h4>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400">Similarity Score:</span>
+                    <span class="bg-purple-600 px-2 py-1 rounded text-xs">${Math.round(similarityScore)}%</span>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-3">
+                    <div>
+                        <p class="text-gray-400 mb-1">Your Answer:</p>
+                        <div class="bg-gray-800 rounded p-2 text-xs border-l-2 border-green-400">
+                            "${responseData.transcript}"
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 mb-1">Model Answer:</p>
+                        <div class="bg-gray-800 rounded p-2 text-xs border-l-2 border-yellow-400">
+                            "${expectedAnswer}"
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="border-t border-gray-600 pt-2">
+                    <p class="text-gray-400 mb-1">Quick Tips:</p>
+                    <ul class="text-xs text-gray-500 space-y-1">
+                        ${generateQuickTips(responseData.transcript, expectedAnswer, similarityScore)}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Append to feedback div
+    feedbackDiv.innerHTML += comparisonHTML;
+}
+
+// Function to generate quick tips for practice mode
+function generateQuickTips(yourAnswer, expectedAnswer, similarityScore) {
+    const tips = [];
+    
+    if (similarityScore < 40) {
+        tips.push('<li>• Try to address the question more directly</li>');
+    }
+    if (yourAnswer.length < 30) {
+        tips.push('<li>• Provide more detailed responses</li>');
+    }
+    if (!yourAnswer.toLowerCase().includes('example')) {
+        tips.push('<li>• Include specific examples</li>');
+    }
+    if (!yourAnswer.toLowerCase().includes('experience') && expectedAnswer.toLowerCase().includes('experience')) {
+        tips.push('<li>• Mention relevant experience</li>');
+    }
+    
+    return tips.length > 0 ? tips.join('') : '<li>• Good answer! Keep up the good work</li>';
+}
+
+// Function to setup comparison toggle functionality
+function setupComparisonToggle() {
+    const toggleBtn = document.getElementById('toggleComparison');
+    const comparisonContent = document.getElementById('comparisonContent');
+    
+    if (toggleBtn && comparisonContent) {
+        let isExpanded = false;
+        
+        toggleBtn.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            
+            if (isExpanded) {
+                comparisonContent.classList.remove('hidden');
+                toggleBtn.innerHTML = '<i class="fas fa-eye-slash mr-2"></i>Hide Details';
+            } else {
+                comparisonContent.classList.add('hidden');
+                toggleBtn.innerHTML = '<i class="fas fa-eye mr-2"></i>Show Details';
+            }
+        });
+        
+        // Initially hide the detailed content
+        comparisonContent.classList.add('hidden');
+    }
 }
 
 async function generateQuickFeedback(responseData) {
@@ -1761,9 +1937,14 @@ function showResults() {
     // Generate accent analysis
     generateAccentAnalysis();
     
-    // Show answer comparison for mock interviews
-    if (currentMode === 'mock' && Object.keys(expectedAnswers).length > 0) {
+    // Show answer comparison for both mock and practice interviews
+    if (Object.keys(expectedAnswers).length > 0) {
         showAnswerComparison();
+    } else if (currentMode === 'practice' && responses.length > 0) {
+        // For practice mode, generate expected answers on the fly
+        generateExpectedAnswersForPractice().then(() => {
+            showAnswerComparison();
+        });
     }
     // Save interview result
     (async () => {
@@ -1936,7 +2117,12 @@ async function generateDetailedFeedback() {
 
 function createProgressChart() {
     console.log('Creating progress chart...');
-    const ctx = document.getElementById('progressChart').getContext('2d');
+    const canvas = document.getElementById('interviewProgressChart');
+    if (!canvas) {
+        console.error('interviewProgressChart canvas not found');
+        return;
+    }
+    const ctx = canvas.getContext('2d');
     
     new Chart(ctx, {
         type: 'line',
@@ -2214,7 +2400,7 @@ async function generateExpectedAnswer(question, interviewType) {
         Provide only the answer, no additional text.
         `;
         
-        const response = await fetch(`${GEMINI_API_BASE_URL}?key=${geminiApiKey}`, {
+        const response = await fetch(`${GEMINI_API_BASE_URL}?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2242,12 +2428,29 @@ async function generateExpectedAnswer(question, interviewType) {
     }
 }
 
+// Function to generate expected answers for practice mode
+async function generateExpectedAnswersForPractice() {
+    console.log('Generating expected answers for practice mode...');
+    
+    try {
+        for (let i = 0; i < responses.length; i++) {
+            const response = responses[i];
+            const expectedAnswer = await generateExpectedAnswer(response.question, currentInterviewType);
+            expectedAnswers[i] = expectedAnswer;
+        }
+        
+        console.log('Expected answers generated for practice mode:', responses.length, 'questions');
+    } catch (error) {
+        console.error('Error generating expected answers for practice:', error);
+    }
+}
+
 // Fallback function to generate basic expected answers
 
 
 // Function to display answer comparison for mock interviews
-function showAnswerComparison() {
-    console.log('Showing answer comparison...');
+async function showAnswerComparison() {
+    console.log('Showing enhanced answer comparison...');
     
     const comparisonContainer = document.getElementById('answerComparison');
     const comparisonContent = document.getElementById('comparisonContent');
@@ -2255,48 +2458,252 @@ function showAnswerComparison() {
     // Show the comparison section
     comparisonContainer.classList.remove('hidden');
     
-    // Generate comparison HTML
+    // Show loading state
+    comparisonContent.innerHTML = `
+        <div class="text-center py-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+            <p class="text-gray-400">Analyzing your answers...</p>
+        </div>
+    `;
+    
+    // Generate enhanced comparison HTML
     let comparisonHTML = '';
     
-    responses.forEach((response, index) => {
+    for (let index = 0; index < responses.length; index++) {
+        const response = responses[index];
         const expectedAnswer = expectedAnswers[index] || 'No expected answer available.';
         const yourAnswer = response.transcript || 'No answer recorded.';
         const scores = response.scores;
         
+        // Generate detailed analysis for this answer
+        const analysis = await generateAnswerAnalysis(response.question, yourAnswer, expectedAnswer);
+        
         comparisonHTML += `
-            <div class="bg-gray-700 rounded-lg p-4">
-                <h4 class="font-semibold text-blue-400 mb-3">Question ${index + 1}: ${response.question}</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            <div class="bg-gray-700 rounded-lg p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="font-semibold text-blue-400 text-lg">Question ${index + 1}</h4>
+                    <div class="flex gap-2">
+                        <span class="bg-blue-600 px-3 py-1 rounded-full text-xs">Similarity: ${analysis.similarityScore}%</span>
+                        <span class="bg-green-600 px-3 py-1 rounded-full text-xs">Relevance: ${scores.relevance.toFixed(1)}/10</span>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <p class="text-gray-300 text-sm mb-2">${response.question}</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div>
-                        <h5 class="font-medium text-green-400 mb-2 flex items-center">
-                            <span class="mr-2">🎤</span>Your Answer:
+                        <h5 class="font-medium text-green-400 mb-3 flex items-center">
+                            <span class="mr-2">🎤</span>Your Answer
                         </h5>
-                        <div class="bg-gray-600 rounded p-3 text-sm leading-relaxed">
-                            "${yourAnswer}"
+                        <div class="bg-gray-800 rounded-lg p-4 text-sm leading-relaxed border-l-4 border-green-400">
+                            <p class="text-gray-200">${yourAnswer}</p>
+                        </div>
+                        <div class="mt-3 text-xs text-gray-400">
+                            <div class="flex justify-between">
+                                <span>Fluency: ${scores.fluency.toFixed(1)}/10</span>
+                                <span>Confidence: ${scores.confidence.toFixed(1)}/10</span>
+                            </div>
                         </div>
                     </div>
+                    
                     <div>
-                        <h5 class="font-medium text-yellow-400 mb-2 flex items-center">
-                            <span class="mr-2">📝</span>Model Answer:
+                        <h5 class="font-medium text-yellow-400 mb-3 flex items-center">
+                            <span class="mr-2">📝</span>Model Answer
                         </h5>
-                        <div class="bg-gray-600 rounded p-3 text-sm leading-relaxed">
-                            "${expectedAnswer}"
+                        <div class="bg-gray-800 rounded-lg p-4 text-sm leading-relaxed border-l-4 border-yellow-400">
+                            <p class="text-gray-200">${expectedAnswer}</p>
+                        </div>
+                        <div class="mt-3 text-xs text-gray-400">
+                            <span>Professional response with key points highlighted</span>
                         </div>
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-3 text-xs">
-                    <span class="bg-blue-600 px-2 py-1 rounded">Confidence: ${scores.confidence.toFixed(1)}</span>
-                    <span class="bg-green-600 px-2 py-1 rounded">Fluency: ${scores.fluency.toFixed(1)}</span>
-                    <span class="bg-yellow-600 px-2 py-1 rounded">Relevance: ${scores.relevance.toFixed(1)}</span>
-                    <span class="bg-purple-600 px-2 py-1 rounded">Overall: ${scores.overall.toFixed(1)}</span>
+                
+                <!-- Analysis Section -->
+                <div class="bg-gray-800 rounded-lg p-4 mb-4">
+                    <h6 class="font-medium text-purple-400 mb-3 flex items-center">
+                        <span class="mr-2">🔍</span>Analysis & Suggestions
+                    </h6>
+                    <div class="space-y-3 text-sm">
+                        <div>
+                            <p class="text-gray-300 mb-2"><strong>Key Points Covered:</strong></p>
+                            <div class="flex flex-wrap gap-2">
+                                ${analysis.coveredPoints.map(point => 
+                                    `<span class="bg-green-600 px-2 py-1 rounded text-xs">✓ ${point}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                        
+                        ${analysis.missedPoints.length > 0 ? `
+                        <div>
+                            <p class="text-gray-300 mb-2"><strong>Points to Include:</strong></p>
+                            <div class="flex flex-wrap gap-2">
+                                ${analysis.missedPoints.map(point => 
+                                    `<span class="bg-red-600 px-2 py-1 rounded text-xs">+ ${point}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <div>
+                            <p class="text-gray-300 mb-2"><strong>Improvement Tips:</strong></p>
+                            <ul class="list-disc list-inside text-gray-400 space-y-1">
+                                ${analysis.improvementTips.map(tip => 
+                                    `<li>${tip}</li>`
+                                ).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Keyword Analysis -->
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <h6 class="font-medium text-blue-400 mb-3 flex items-center">
+                        <span class="mr-2">🔑</span>Keyword Analysis
+                    </h6>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p class="text-gray-400 mb-2">Keywords Used:</p>
+                            <div class="flex flex-wrap gap-1">
+                                ${analysis.usedKeywords.map(keyword => 
+                                    `<span class="bg-blue-600 px-2 py-1 rounded text-xs">${keyword}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 mb-2">Important Keywords:</p>
+                            <div class="flex flex-wrap gap-1">
+                                ${analysis.importantKeywords.map(keyword => 
+                                    `<span class="bg-yellow-600 px-2 py-1 rounded text-xs">${keyword}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
-    });
+    }
     
     comparisonContent.innerHTML = comparisonHTML;
     
-    console.log('Answer comparison displayed for', responses.length, 'questions');
+    console.log('Enhanced answer comparison displayed for', responses.length, 'questions');
+}
+
+// Function to generate detailed analysis for answer comparison
+async function generateAnswerAnalysis(question, yourAnswer, expectedAnswer) {
+    try {
+        // Simple similarity calculation (can be enhanced with more sophisticated NLP)
+        const similarityScore = calculateSimilarity(yourAnswer, expectedAnswer);
+        
+        // Extract key points and keywords
+        const analysis = {
+            similarityScore: Math.round(similarityScore),
+            coveredPoints: extractCoveredPoints(yourAnswer, expectedAnswer),
+            missedPoints: extractMissedPoints(yourAnswer, expectedAnswer),
+            usedKeywords: extractKeywords(yourAnswer),
+            importantKeywords: extractImportantKeywords(expectedAnswer),
+            improvementTips: generateImprovementTips(yourAnswer, expectedAnswer, similarityScore)
+        };
+        
+        return analysis;
+    } catch (error) {
+        console.error('Error generating answer analysis:', error);
+        return {
+            similarityScore: 50,
+            coveredPoints: ['Basic response structure'],
+            missedPoints: ['Specific examples', 'Professional tone'],
+            usedKeywords: ['interview', 'experience'],
+            importantKeywords: ['professional', 'specific', 'example'],
+            improvementTips: ['Try to be more specific', 'Include relevant examples', 'Maintain professional tone']
+        };
+    }
+}
+
+// Calculate similarity between two answers
+function calculateSimilarity(answer1, answer2) {
+    if (!answer1 || !answer2) return 0;
+    
+    const words1 = answer1.toLowerCase().split(/\s+/);
+    const words2 = answer2.toLowerCase().split(/\s+/);
+    
+    const commonWords = words1.filter(word => words2.includes(word));
+    const totalWords = new Set([...words1, ...words2]);
+    
+    return (commonWords.length / totalWords.size) * 100;
+}
+
+// Extract points covered in the answer
+function extractCoveredPoints(yourAnswer, expectedAnswer) {
+    const points = [];
+    
+    if (yourAnswer.toLowerCase().includes('experience')) points.push('Experience');
+    if (yourAnswer.toLowerCase().includes('skill')) points.push('Skills');
+    if (yourAnswer.toLowerCase().includes('goal') || yourAnswer.toLowerCase().includes('objective')) points.push('Goals');
+    if (yourAnswer.toLowerCase().includes('team') || yourAnswer.toLowerCase().includes('collaborat')) points.push('Teamwork');
+    if (yourAnswer.toLowerCase().includes('problem') || yourAnswer.toLowerCase().includes('challenge')) points.push('Problem-solving');
+    if (yourAnswer.toLowerCase().includes('learn') || yourAnswer.toLowerCase().includes('growth')) points.push('Learning');
+    
+    return points.length > 0 ? points : ['Basic response'];
+}
+
+// Extract points that were missed
+function extractMissedPoints(yourAnswer, expectedAnswer) {
+    const points = [];
+    
+    if (!yourAnswer.toLowerCase().includes('example') && expectedAnswer.toLowerCase().includes('example')) {
+        points.push('Specific examples');
+    }
+    if (!yourAnswer.toLowerCase().includes('result') && expectedAnswer.toLowerCase().includes('result')) {
+        points.push('Quantifiable results');
+    }
+    if (!yourAnswer.toLowerCase().includes('future') && expectedAnswer.toLowerCase().includes('future')) {
+        points.push('Future plans');
+    }
+    if (!yourAnswer.toLowerCase().includes('company') && expectedAnswer.toLowerCase().includes('company')) {
+        points.push('Company research');
+    }
+    
+    return points;
+}
+
+// Extract keywords from answer
+function extractKeywords(answer) {
+    const commonKeywords = ['experience', 'skill', 'team', 'project', 'leadership', 'communication', 'problem', 'solution', 'goal', 'learn', 'growth', 'success', 'challenge', 'opportunity'];
+    return commonKeywords.filter(keyword => answer.toLowerCase().includes(keyword)).slice(0, 5);
+}
+
+// Extract important keywords from expected answer
+function extractImportantKeywords(expectedAnswer) {
+    const importantKeywords = ['professional', 'specific', 'example', 'result', 'impact', 'leadership', 'collaboration', 'innovation', 'growth', 'excellence'];
+    return importantKeywords.filter(keyword => expectedAnswer.toLowerCase().includes(keyword)).slice(0, 5);
+}
+
+// Generate improvement tips
+function generateImprovementTips(yourAnswer, expectedAnswer, similarityScore) {
+    const tips = [];
+    
+    if (similarityScore < 30) {
+        tips.push('Try to address the question more directly');
+        tips.push('Include more relevant details and examples');
+    } else if (similarityScore < 60) {
+        tips.push('Add specific examples to support your points');
+        tips.push('Use more professional language and tone');
+    } else {
+        tips.push('Great answer! Consider adding quantifiable results');
+        tips.push('Maintain this level of detail in future responses');
+    }
+    
+    if (yourAnswer.length < 50) {
+        tips.push('Provide more detailed responses');
+    }
+    
+    if (!yourAnswer.toLowerCase().includes('example')) {
+        tips.push('Include specific examples to make your answer more compelling');
+    }
+    
+    return tips.slice(0, 3);
 }
 
 function startEnhancedConfidenceAnalysis() {
@@ -2484,6 +2891,50 @@ function updateTranscript(text) {
     } else {
         transcriptElement.innerHTML = `<p class="text-white">${finalPart}</p>`;
     }
+    
+    // Update real-time comparison
+    if (finalPart.trim()) {
+        updateRealtimeComparison(finalPart);
+    } else {
+        resetRealtimeComparison();
+    }
+}
+
+// Function to update real-time comparison as user speaks
+function updateRealtimeComparison(text) {
+    const yourAnswerElement = document.getElementById('realtimeYourAnswer');
+    const similarityScoreElement = document.getElementById('realtimeSimilarityScore');
+    
+    // Update your answer display
+    yourAnswerElement.innerHTML = `<p class="text-gray-200">${text}</p>`;
+    
+    // Calculate similarity with model answer
+    const modelAnswerElement = document.getElementById('realtimeModelAnswer');
+    const modelAnswer = modelAnswerElement.querySelector('p')?.textContent || '';
+    
+    if (modelAnswer && text.trim()) {
+        const similarityScore = calculateSimilarity(text, modelAnswer);
+        similarityScoreElement.textContent = `${Math.round(similarityScore)}%`;
+        
+        // Update color based on similarity score
+        if (similarityScore >= 70) {
+            similarityScoreElement.className = 'bg-green-600 px-2 py-1 rounded text-xs';
+        } else if (similarityScore >= 40) {
+            similarityScoreElement.className = 'bg-yellow-600 px-2 py-1 rounded text-xs';
+        } else {
+            similarityScoreElement.className = 'bg-red-600 px-2 py-1 rounded text-xs';
+        }
+    }
+}
+
+// Function to reset real-time comparison
+function resetRealtimeComparison() {
+    const yourAnswerElement = document.getElementById('realtimeYourAnswer');
+    const similarityScoreElement = document.getElementById('realtimeSimilarityScore');
+    
+    yourAnswerElement.innerHTML = '<p class="text-gray-500">Start speaking to see your answer...</p>';
+    similarityScoreElement.textContent = '--%';
+    similarityScoreElement.className = 'bg-purple-600 px-2 py-1 rounded text-xs';
 }
 
 function showLoading(message) {
@@ -2778,12 +3229,15 @@ async function saveInterviewResult({
 
 // Fetch and display user progress
 async function loadUserProgress() {
+    console.log('loadUserProgress called, currentUser:', currentUser);
     if (!currentUser) {
+        console.log('No current user, hiding progress section');
         showProgressSection(false);
         return;
     }
     showProgressSection(true);
     try {
+        console.log('Fetching interview results for user:', currentUser.id);
         const { data, error } = await supabase
             .from('interview_results')
             .select('*')
@@ -2793,6 +3247,7 @@ async function loadUserProgress() {
             console.error('Error loading progress:', error);
             return;
         }
+        console.log('Fetched interview results:', data);
         renderProgressChart(data);
         renderProgressHistory(data);
     } catch (err) {
@@ -2802,8 +3257,15 @@ async function loadUserProgress() {
 
 // Render Chart.js line graph
 function renderProgressChart(results) {
-    const ctx = document.getElementById('progressChart').getContext('2d');
+    console.log('renderProgressChart called with results:', results);
+    const canvas = document.getElementById('userProgressChart');
+    if (!canvas) {
+        console.error('userProgressChart canvas not found');
+        return;
+    }
+    const ctx = canvas.getContext('2d');
     if (!results || results.length === 0) {
+        console.log('No results to display, clearing canvas');
         ctx.clearRect(0, 0, 400, 120);
         return;
     }
